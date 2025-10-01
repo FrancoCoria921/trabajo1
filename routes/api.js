@@ -1,140 +1,105 @@
-// routes/api.js
-
-'use strict';
-
-const axios = require('axios');
+const express = require('express');
+const router = express.Router();
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
-// =================================================================
-// 📝 Modelo de Mongoose para Stocks
-// =================================================================
-
+// Esquema para almacenar stocks y likes
 const stockSchema = new mongoose.Schema({
-  stock: { type: String, required: true, unique: true }, // Ticker (ej: 'GOOG')
-  likes: [{ type: String }], // Array de IPs anonimizadas que dieron 'like'
+  symbol: { type: String, required: true },
+  likes: { type: [String], default: [] } // Almacena IPs hasheadas
 });
 
-// Exporta el modelo para evitar redefinición en entornos de prueba
-const Stock = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
+const Stock = mongoose.model('Stock', stockSchema);
 
-// =================================================================
-// 🔒 Función de Anonimización de IP (Privacidad)
-// =================================================================
+// Función para hashear IP (cumple con GDPR)
+function hashIP(ip) {
+  // Manejar IPs con prefijo ::ffff: de IPv6
+  const cleanIP = ip.replace('::ffff:', '');
+  return crypto.createHash('sha256').update(cleanIP).digest('hex');
+}
 
-/**
- * Anonimiza la dirección IP truncando el último octeto a '0'.
- * @param {string} ip - Dirección IP del usuario.
- * @returns {string} IP anonimizada.
- */
-const getAnonIp = (ip) => {
-  if (!ip) return null;
-  // Manejar caso de proxies que envían múltiples IPs (tomar la primera)
-  const address = ip.split(',')[0].trim(); 
-  
-  // Truncar IPv4
-  const parts = address.split('.');
-  if (parts.length === 4) {
-    parts[3] = '0'; // Anonimiza el último octeto
-    return parts.join('.');
+// Función para obtener datos de la acción desde el proxy
+async function getStockPrice(stockSymbol) {
+  try {
+    const response = await fetch(`https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stockSymbol}/quote`);
+    
+    if (!response.ok) {
+      throw new Error(`Error API: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return {
+      stock: data.symbol,
+      price: data.latestPrice
+    };
+  } catch (error) {
+    console.error('Error obteniendo precio:', error);
+    throw new Error('No se pudo obtener el precio de la acción');
   }
-  
-  // Retornar la dirección para IPv6 o desconocidos (o se podría usar un hash)
-  return address; 
-};
+}
 
+// Ruta principal para obtener datos de acciones
+router.get('/stock-prices', async (req, res) => {
+  try {
+    const { stock, like } = req.query;
+    const userIP = hashIP(req.ip || req.connection.remoteAddress);
+    
+    if (!stock) {
+      return res.status(400).json({ error: 'Se requiere el parámetro "stock"' });
+    }
 
-module.exports = function (app) {
+    const stocks = Array.isArray(stock) ? stock : [stock];
+    const likeBool = like === 'true';
 
-  app.route('/api/stock-prices')
-    .get(async (req, res) => {
-      const { stock, like } = req.query;
-      const stocksArray = Array.isArray(stock) ? stock : [stock];
-      const anonIp = getAnonIp(req.ip);
+    // Procesar cada stock
+    const stockDataPromises = stocks.map(async (stockSymbol) => {
+      const stockUpper = stockSymbol.toUpperCase();
       
-      const BASE_URL = 'https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock';
-
-      // =============================================================
-      // 📈 Helper: Obtener Precio y Actualizar Likes
-      // =============================================================
-      
-      const fetchStockData = async (ticker) => {
-        const uppercaseTicker = ticker.toUpperCase();
-
-        // 1. Obtener precio del proxy
-        let latestPrice;
-        try {
-          const priceUrl = `${BASE_URL}/${uppercaseTicker}/quote`;
-          const priceResponse = await axios.get(priceUrl);
-          latestPrice = priceResponse.data.latestPrice;
-        } catch (error) {
-           // Si el stock no existe en el proxy, retorna un objeto incompleto
-           return {
-              stock: uppercaseTicker,
-              price: null,
-              likes: 0
-           };
-        }
-
-        // 2. Gestionar 'like' en la DB
-        let stockDoc = await Stock.findOne({ stock: uppercaseTicker });
-
-        if (!stockDoc) {
-          stockDoc = new Stock({ stock: uppercaseTicker, likes: [] });
-        }
-
-        let currentLikes = stockDoc.likes.length;
-        
-        // Si el usuario pide like y su IP anonimizada no está registrada, añadirla
-        if (like === 'true' && anonIp && !stockDoc.likes.includes(anonIp)) {
-          stockDoc.likes.push(anonIp);
-          await stockDoc.save();
-          currentLikes = stockDoc.likes.length; // Actualizar conteo
-        } else if (like === 'true' && anonIp && stockDoc.likes.includes(anonIp)) {
-          // No hace nada si ya dio like (solo se devuelve el conteo existente)
-          currentLikes = stockDoc.likes.length;
-        }
-
-
-        return {
-          stock: uppercaseTicker,
-          price: latestPrice,
-          likes: currentLikes,
-        };
-      };
-      
-      try {
-        if (stocksArray.length === 1) {
-          // =========================================
-          // Caso 1: Un Solo Stock
-          // =========================================
-          const stockData = await fetchStockData(stocksArray[0]);
-          if (!stockData.price) {
-             return res.json({ stockData: 'No stock data found' });
-          }
-          res.json({ stockData });
-
-        } else if (stocksArray.length === 2) {
-          // =========================================
-          // Caso 2: Dos Stocks (usar Promise.all)
-          // =========================================
-          
-          const [data1, data2] = await Promise.all(stocksArray.map(fetchStockData));
-          
-          // Calcular likes relativos (rel_likes)
-          const rel_likes_1 = data1.likes - data2.likes;
-          const rel_likes_2 = data2.likes - data1.likes;
-          
-          // Formatear respuesta con likes relativos
-          const responseData = [
-            { stock: data1.stock, price: data1.price, rel_likes: rel_likes_1 },
-            { stock: data2.stock, price: data2.price, rel_likes: rel_likes_2 },
-          ];
-
-          res.json({ stockData: responseData });
-        }
-      } catch (error) {
-        console.error("Error al procesar la solicitud:", error.message);
-        res.status(500).json({ error: 'Error interno del servidor' });
+      // Buscar o crear el stock en la base de datos
+      let stockDoc = await Stock.findOne({ symbol: stockUpper });
+      if (!stockDoc) {
+        stockDoc = new Stock({ symbol: stockUpper, likes: [] });
       }
+
+      // Manejar el "like" si está solicitado
+      if (likeBool && !stockDoc.likes.includes(userIP)) {
+        stockDoc.likes.push(userIP);
+        await stockDoc.save();
+      }
+
+      // Obtener el precio actual
+      const priceInfo = await getStockPrice(stockUpper);
+      
+      return {
+        stock: stockUpper,
+        price: priceInfo.price,
+        likes: stockDoc.likes.length
+      };
     });
-};
+
+    const stockData = await Promise.all(stockDataPromises);
+
+    // Formatear respuesta para uno o dos stocks
+    let responseData;
+    if (stockData.length === 1) {
+      responseData = { stockData: stockData[0] };
+    } else {
+      // Calcular likes relativos para comparación de dos stocks
+      const rel_likes = stockData[0].likes - stockData[1].likes;
+      responseData = {
+        stockData: [
+          { ...stockData[0], rel_likes },
+          { ...stockData[1], rel_likes: -rel_likes }
+        ]
+      };
+    }
+
+    res.json(responseData);
+    
+  } catch (error) {
+    console.error('Error en /api/stock-prices:', error);
+    res.status(500).json({ error: 'Error del servidor al obtener datos de acciones' });
+  }
+});
+
+module.exports = router;
