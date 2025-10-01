@@ -1,60 +1,43 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Stock Price Checker</title>
-    <link
-      id="favicon"
-      rel="icon"
-      href="https://cdn.freecodecamp.org/universal/favicons/favicon-32x32.png"
-      type="image/x-icon"
-    />
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="./public/style.css" />
-  </head>
-  <body>
-    <header>
-      <h1>ISQA_5 - Nasdaq Stock Price Checker</h1>
-    </header>
-    <div id="userstories">
-      <h3>Example usage:</h3>
-      <code>/api/stock-prices?stock=GOOG</code>
-      <br />
-      <code>/api/stock-prices?stock=GOOG&amp;like=true</code>
-      <br />
-      <code>/api/stock-prices?stock=GOOG&amp;stock=MSFT</code>
-      <br />
-      <code>/api/stock-prices?stock=GOOG&amp;stock=MSFT&amp;like=true</code>
-      <br />
-      <h3>Example return:</h3>
-      <code>{"stockData":{"stock":"GOOG","price":786.90,"likes":1}}</code>
-      <br />
-      <code>
-        {"stockData":[{"stock":"MSFT","price":62.30,"rel_likes":-1},{"stock":"GOOG","price":786.90,"rel_likes":1}]}
-      </code>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobador de Precios de Acciones</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Comprobador de Precios de Acciones</h1>
+        
+        <div class="form-section">
+            <h2>Consultar Precio de Acción</h2>
+            <form id="singleStockForm">
+                <input type="text" id="stockInput" placeholder="Ej: AAPL" required>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="likeCheckbox"> ¿Dar me gusta?
+                </label>
+                <button type="submit">Obtener Precio</button>
+            </form>
+        </div>
+
+        <div class="form-section">
+            <h2>Comparar Dos Acciones</h2>
+            <form id="compareStocksForm">
+                <div class="input-group">
+                    <input type="text" id="stock1Input" placeholder="Ej: GOOG" required>
+                    <input type="text" id="stock2Input" placeholder="Ej: MSFT" required>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="compareLikeCheckbox"> ¿Dar me gusta a ambas?
+                </label>
+                <button type="submit">Comparar Acciones</button>
+            </form>
+        </div>
+
+        <div id="result" class="result-section"></div>
     </div>
-    <hr class="p-50" />
-    <div id="testui">
-      <h2 class="text-align-left">Front-End:</h2>
-      <h3>Get single price and total likes</h3>
-      <form id="testForm2" class="border">
-        <input type="text" name="stock" placeholder="GOOG" required="" />
-        <input type="checkbox" name="like" value="true" /> Like?
-        <br />
-        <button type="submit">Get Price!</button>
-      </form>
-      <h3>Compare and get relative likes</h3>
-      <form id="testForm" class="border">
-        <input type="text" name="stock" placeholder="GOOG" required="" />
-        <input type="text" name="stock" placeholder="MSFT" required="" />
-        <input type="checkbox" name="like" value="true" /> Like both?
-        <br />
-        <button type="submit">Get Price!</button>
-      </form>
-      <code id="jsonResult"></code>
-    </div>
-    <hr class="m-50 mt-200" />
-    <script src="/public/script.js"></script>
-  </body>
+
+    <script src="/script.js"></script>
+</body>
 </html>
