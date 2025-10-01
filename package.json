@@ -1,29 +1,31 @@
 {
   "name": "stock-price-checker",
   "version": "1.0.0",
-  "description": "Information security and quality assurance project for freeCodeCamp.",
+  "description": "Comprobador de precios de acciones - proyecto freeCodeCamp",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "mocha --timeout 5000 --ui tdd tests/"
+    "dev": "nodemon server.js",
+    "test": "NODE_ENV=test node ./tests/2_functional-tests.js"
   },
   "dependencies": {
-    "body-parser": "^1.19.0",
-    "chai": "^4.2.0",
-    "chai-http": "^4.3.0",
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
     "cors": "^2.8.5",
-    "dotenv": "^8.2.0",
-    "express": "^4.16.4",
-    "helmet": "^3.22.0",
-    "mocha": "^7.1.1",
-    "mongoose": "^5.9.10",
-    "node-fetch": "^2.6.0"
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "chai": "^4.3.8",
+    "chai-http": "^4.3.0"
   },
   "keywords": [
     "stock",
     "price",
     "checker",
-    "fcc"
+    "fcc",
+    "api"
   ],
-  "license": "ISC"
+  "author": "Tu nombre",
+  "license": "MIT"
 }
