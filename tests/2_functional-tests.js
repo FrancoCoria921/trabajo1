@@ -1,6 +1,6 @@
 const chai = require('chai');
 const chaiHttp = require('chai-http');
-const server = require('../server'); // Ajusta la ruta a tu server.js
+const server = require('../server');
 const { expect } = chai;
 
 chai.use(chaiHttp);
@@ -9,9 +9,10 @@ suite('Pruebas Funcionales del Comprobador de Precios de Acciones', function() {
   
   // Test 1: Visualización de un stock
   test('1) Visualización de un stock: GET request a /api/stock-prices/', function(done) {
-    this.timeout(10000); // Aumentar timeout para peticiones externas
+    this.timeout(10000);
     
     chai.request(server)
+      .keepOpen()
       .get('/api/stock-prices/')
       .query({ stock: 'GOOG' })
       .end(function(err, res) {
@@ -32,6 +33,7 @@ suite('Pruebas Funcionales del Comprobador de Precios de Acciones', function() {
     this.timeout(10000);
     
     chai.request(server)
+      .keepOpen()
       .get('/api/stock-prices/')
       .query({ stock: 'AAPL', like: true })
       .end(function(err, res) {
@@ -45,21 +47,20 @@ suite('Pruebas Funcionales del Comprobador de Precios de Acciones', function() {
   test('3) Viendo el mismo stock y me gustando nuevamente: GET request a /api/stock-prices/', function(done) {
     this.timeout(10000);
     
-    // Primera solicitud con like
     chai.request(server)
+      .keepOpen()
       .get('/api/stock-prices/')
       .query({ stock: 'MSFT', like: true })
       .end(function(err, res1) {
         expect(res1).to.have.status(200);
         const likesFirstTry = res1.body.stockData.likes;
 
-        // Segunda solicitud con like desde la misma IP
         chai.request(server)
+          .keepOpen()
           .get('/api/stock-prices/')
           .query({ stock: 'MSFT', like: true })
           .end(function(err, res2) {
             expect(res2).to.have.status(200);
-            // El número de likes debe ser igual (no debe incrementarse)
             expect(res2.body.stockData.likes).to.equal(likesFirstTry);
             done();
           });
@@ -71,18 +72,17 @@ suite('Pruebas Funcionales del Comprobador de Precios de Acciones', function() {
     this.timeout(10000);
     
     chai.request(server)
+      .keepOpen()
       .get('/api/stock-prices/')
       .query({ stock: ['AMZN', 'TSLA'] })
       .end(function(err, res) {
         expect(res).to.have.status(200);
         expect(res.body.stockData).to.be.an('array').with.lengthOf(2);
         
-        // Verificar primer stock
         expect(res.body.stockData[0]).to.have.property('stock', 'AMZN');
         expect(res.body.stockData[0]).to.have.property('price');
         expect(res.body.stockData[0]).to.have.property('rel_likes');
         
-        // Verificar segundo stock
         expect(res.body.stockData[1]).to.have.property('stock', 'TSLA');
         expect(res.body.stockData[1]).to.have.property('price');
         expect(res.body.stockData[1]).to.have.property('rel_likes');
@@ -96,17 +96,16 @@ suite('Pruebas Funcionales del Comprobador de Precios de Acciones', function() {
     this.timeout(10000);
     
     chai.request(server)
+      .keepOpen()
       .get('/api/stock-prices/')
       .query({ stock: ['NFLX', 'META'], like: true })
       .end(function(err, res) {
         expect(res).to.have.status(200);
         expect(res.body.stockData).to.be.an('array').with.lengthOf(2);
         
-        // Verificar que los likes relativos sean números
         expect(res.body.stockData[0].rel_likes).to.be.a('number');
         expect(res.body.stockData[1].rel_likes).to.be.a('number');
         
-        // Verificar que los likes relativos sumen cero (uno positivo, otro negativo)
         const sum = res.body.stockData[0].rel_likes + res.body.stockData[1].rel_likes;
         expect(sum).to.equal(0);
         
