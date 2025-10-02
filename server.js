@@ -11,36 +11,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ✅ CONFIGURACIÓN MANUAL DE CSP (SIN HELMET)
-app.use((req, res, next) => {
-  // Generar nonce único para cada solicitud :cite[1]:cite[8]
-  const nonce = crypto.randomBytes(16).toString('base64');
-  
-  // Definir la Política de Seguridad de Contenido
-  const cspHeader = `
-    default-src 'self';
-    script-src 'self' 'nonce-${nonce}';
-    style-src 'self' 'nonce-${nonce}';
-    img-src 'self' data:;
-    connect-src 'self' https://stock-price-checker-proxy.freecodecamp.rocks;
-    font-src 'self';
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self';
-    frame-ancestors 'none';
-    upgrade-insecure-requests;
-  `.replace(/\s{2,}/g, ' ').trim();
-
-  // Establecer la cabecera CSP :cite[1]:cite[4]
-  res.setHeader('Content-Security-Policy', cspHeader);
-  
-  // Pasar el nonce a las vistas
-  res.locals.nonce = nonce;
-  next();
-});
-
 // Conexión a MongoDB
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/stockpricechecker', {
+mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/stockpricechecker', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
@@ -55,19 +27,92 @@ const stockSchema = new mongoose.Schema({
 
 const Stock = mongoose.model('Stock', stockSchema);
 
-// Función para hashear IPs (cumple con GDPR) :cite[8]
+// Función para hashear IPs (cumple con GDPR)
 function hashIP(ip) {
   const cleanIP = ip.replace('::ffff:', '');
   return crypto.createHash('sha256').update(cleanIP).digest('hex');
 }
 
-// Importar rutas de la API
-const apiRoutes = require('./routes/api.js');
-app.use('/api', apiRoutes);
+// Ruta de la API para stock-prices
+app.get('/api/stock-prices', async (req, res) => {
+  try {
+    const { stock, like } = req.query;
+    const userIP = hashIP(req.ip || req.connection.remoteAddress);
+    
+    if (!stock) {
+      return res.status(400).json({ error: 'Se requiere el parámetro "stock"' });
+    }
+
+    const stocks = Array.isArray(stock) ? stock : [stock];
+    const likeBool = like === 'true';
+
+    // Procesar cada stock
+    const stockDataPromises = stocks.map(async (stockSymbol) => {
+      const stockUpper = stockSymbol.toUpperCase();
+      
+      // Obtener datos del precio desde el proxy
+      const response = await fetch(`https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stockUpper}/quote`);
+      const priceData = await response.json();
+      
+      if (!priceData || !priceData.latestPrice) {
+        throw new Error(`No se pudo obtener el precio para ${stockUpper}`);
+      }
+
+      // Buscar o crear el stock en la base de datos
+      let stockDoc = await Stock.findOne({ symbol: stockUpper });
+      if (!stockDoc) {
+        stockDoc = new Stock({ symbol: stockUpper, likes: [] });
+      }
+
+      // Manejar el "like" si está solicitado
+      if (likeBool && !stockDoc.likes.includes(userIP)) {
+        stockDoc.likes.push(userIP);
+        await stockDoc.save();
+      }
+
+      return {
+        stock: stockUpper,
+        price: priceData.latestPrice,
+        likes: stockDoc.likes.length
+      };
+    });
+
+    const stockData = await Promise.all(stockDataPromises);
+
+    // Formatear respuesta para uno o dos stocks
+    let responseData;
+    if (stockData.length === 1) {
+      responseData = { stockData: stockData[0] };
+    } else {
+      // Calcular likes relativos para comparación de dos stocks
+      const rel_likes = stockData[0].likes - stockData[1].likes;
+      responseData = {
+        stockData: [
+          { ...stockData[0], rel_likes },
+          { ...stockData[1], rel_likes: -rel_likes }
+        ]
+      };
+    }
+
+    res.json(responseData);
+    
+  } catch (error) {
+    console.error('Error en /api/stock-prices:', error);
+    res.status(500).json({ error: 'Error del servidor al obtener datos de acciones' });
+  }
+});
+
+// Rutas para testing de freeCodeCamp
+app.get('/_api/routes.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'server.js'));
+});
+
+app.get('/_api/auth.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'auth.js'));
+});
 
 // Ruta principal - servir el frontend
 app.get('/', (req, res) => {
-  // En un proyecto real, usarías un motor de plantillas para pasar el nonce
   res.sendFile(path.join(__dirname, 'views/index.html'));
 });
 
@@ -84,4 +129,4 @@ const server = app.listen(PORT, () => {
 });
 
 // Exportar para testing
-module.exports = { app, server };
+module.exports = app;
