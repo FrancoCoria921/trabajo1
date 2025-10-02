@@ -1,71 +1,74 @@
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
-const apiRoutes = require('./routes/api.js');
 const path = require('path');
-
-// Cargar variables de entorno
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 
-// Middlewares esenciales
-app.use(cors());
+// Middlewares básicos
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
-// Importar crypto para generar nonces (ya viene con Node.js)
-const crypto = require('crypto');
-
-// Middleware para aplicar CSP a todas las rutas
+// ✅ CONFIGURACIÓN MANUAL DE CSP (SIN HELMET)
 app.use((req, res, next) => {
-  // Generar un nonce único para cada solicitud :cite[1]
+  // Generar nonce único para cada solicitud :cite[1]:cite[8]
   const nonce = crypto.randomBytes(16).toString('base64');
   
-  // Definir la Política de Seguridad de Contenido :cite[1]:cite[5]:cite[9]
-  const csp = `
+  // Definir la Política de Seguridad de Contenido
+  const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}';
     style-src 'self' 'nonce-${nonce}';
-    connect-src 'self' https://stock-price-checker-proxy.freecodecamp.rocks;
     img-src 'self' data:;
+    connect-src 'self' https://stock-price-checker-proxy.freecodecamp.rocks;
+    font-src 'self';
     object-src 'none';
     base-uri 'self';
-  `.replace(/\s{2,}/g, ' ').trim(); // Limpiar espacios extra
+    form-action 'self';
+    frame-ancestors 'none';
+    upgrade-insecure-requests;
+  `.replace(/\s{2,}/g, ' ').trim();
 
-  // Establecer la cabecera CSP
-  res.setHeader("Content-Security-Policy", csp);
+  // Establecer la cabecera CSP :cite[1]:cite[4]
+  res.setHeader('Content-Security-Policy', cspHeader);
   
-  // Pasar el nonce a las vistas para usarlo en los templates
+  // Pasar el nonce a las vistas
   res.locals.nonce = nonce;
   next();
 });
 
-// Ruta principal que sirve tu index.html
-app.get('/', (req, res) => {
-  // Renderizar tu vista y pasarle el nonce
-  res.render('index', { 
-    nonce: res.locals.nonce  // Pasar el nonce al template
-  });
-});
-
-// Servir archivos estáticos (frontend)
-app.use(express.static('public'));
-
-// Conectar a MongoDB
-mongoose.connect(process.env.MONGO_URI, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true 
+// Conexión a MongoDB
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/stockpricechecker', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 })
 .then(() => console.log('Conectado a MongoDB'))
 .catch(err => console.error('Error de conexión a MongoDB:', err));
 
-// Rutas de la API
+// Esquema para stocks
+const stockSchema = new mongoose.Schema({
+  symbol: { type: String, required: true },
+  likes: { type: [String], default: [] } // IPs hasheadas
+});
+
+const Stock = mongoose.model('Stock', stockSchema);
+
+// Función para hashear IPs (cumple con GDPR) :cite[8]
+function hashIP(ip) {
+  const cleanIP = ip.replace('::ffff:', '');
+  return crypto.createHash('sha256').update(cleanIP).digest('hex');
+}
+
+// Importar rutas de la API
+const apiRoutes = require('./routes/api.js');
 app.use('/api', apiRoutes);
 
 // Ruta principal - servir el frontend
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../views/index.html'));
+  // En un proyecto real, usarías un motor de plantillas para pasar el nonce
+  res.sendFile(path.join(__dirname, 'views/index.html'));
 });
 
 // Manejo de errores
@@ -76,9 +79,9 @@ app.use((err, req, res, next) => {
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
-const listener = app.listen(PORT, () => {
-  console.log('Tu aplicación está escuchando en el puerto ' + listener.address().port);
+const server = app.listen(PORT, () => {
+  console.log(`Tu aplicación está escuchando en el puerto ${PORT}`);
 });
 
-module.exports = app; // Para testing
-
+// Exportar para testing
+module.exports = { app, server };
