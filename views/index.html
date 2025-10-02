@@ -1,3 +1,4 @@
+<!-- En tu views/index.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5,29 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comprobador de Precios de Acciones</title>
     
-    <!-- Incluir nonce en los estilos -->
-    <style nonce="<%= nonce %>">
-        /* Tus estilos CSS aquí */
-        body { font-family: Arial, sans-serif; }
-        .container { max-width: 800px; margin: 0 auto; }
-    </style>
-    
-    <!-- Enlace a CSS externo con nonce -->
-    <link rel="stylesheet" href="/style.css" nonce="<%= nonce %>">
+    <!-- CSS con nonce (en un proyecto real, el nonce se inyectaría desde el servidor) -->
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Comprobador de Precios de Acciones</h1>
-        <!-- Tu interfaz de usuario aquí -->
-    </div>
-
-    <!-- Scripts con nonce -->
-    <script nonce="<%= nonce %>" src="/script.js"></script>
+    <!-- Tu interfaz de usuario -->
+    <div id="app"></div>
     
-    <!-- Scripts inline también necesitan nonce -->
-    <script nonce="<%= nonce %>">
-        // Código JavaScript inline aquí
-        console.log("Aplicación cargada correctamente");
-    </script>
+    <!-- Scripts con nonce -->
+    <script src="/script.js"></script>
 </body>
 </html>
