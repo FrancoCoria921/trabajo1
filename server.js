@@ -2,9 +2,30 @@ const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
 const crypto = require('crypto');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
+
+// ✅ CONFIGURACIÓN DE SEGURIDAD CON HELMET
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'", "https://stock-price-checker-proxy.freecodecamp.rocks"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"]
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  })
+);
 
 // Middlewares básicos
 app.use(express.json());
@@ -22,7 +43,7 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/stockpricec
 // Esquema para stocks
 const stockSchema = new mongoose.Schema({
   symbol: { type: String, required: true },
-  likes: { type: [String], default: [] } // IPs hasheadas
+  likes: { type: [String], default: [] }
 });
 
 const Stock = mongoose.model('Stock', stockSchema);
@@ -33,7 +54,7 @@ function hashIP(ip) {
   return crypto.createHash('sha256').update(cleanIP).digest('hex');
 }
 
-// Ruta de la API para stock-prices
+// Ruta principal de la API
 app.get('/api/stock-prices', async (req, res) => {
   try {
     const { stock, like } = req.query;
@@ -46,7 +67,6 @@ app.get('/api/stock-prices', async (req, res) => {
     const stocks = Array.isArray(stock) ? stock : [stock];
     const likeBool = like === 'true';
 
-    // Procesar cada stock
     const stockDataPromises = stocks.map(async (stockSymbol) => {
       const stockUpper = stockSymbol.toUpperCase();
       
@@ -84,7 +104,6 @@ app.get('/api/stock-prices', async (req, res) => {
     if (stockData.length === 1) {
       responseData = { stockData: stockData[0] };
     } else {
-      // Calcular likes relativos para comparación de dos stocks
       const rel_likes = stockData[0].likes - stockData[1].likes;
       responseData = {
         stockData: [
@@ -128,5 +147,4 @@ const server = app.listen(PORT, () => {
   console.log(`Tu aplicación está escuchando en el puerto ${PORT}`);
 });
 
-// Exportar para testing
 module.exports = app;
